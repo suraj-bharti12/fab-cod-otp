@@ -11,22 +11,26 @@ handle = "fab-cod-otp"
 type = "ui_extension"
 uid = "659ed2d7-5bd1-833f-b79f-10cfeaecbe65907cee33"
 
+# Renders right below the payment methods
 [[extensions.targeting]]
 module = "./src/Checkout.jsx"
 target = "purchase.checkout.payment-method-list.render-after"
 
 [extensions.capabilities]
 api_access = true
+# Needed to call the backend (OTP send/verify)
 network_access = true
+# Needed to block "Complete order" until the OTP is verified
 block_progress = true
 
+# Settings the merchant can change in the checkout editor
 [extensions.settings]
 
   [[extensions.settings.fields]]
   key = "backend_url"
   type = "single_line_text_field"
   name = "App URL"
-  description = "Aapke app ka URL, e.g. https://your-app.onrender.com (end me / nahi)"
+  description = "Your app URL, e.g. https://your-app.onrender.com (no trailing slash)"
 
   [[extensions.settings.fields]]
   key = "cod_payment_types"

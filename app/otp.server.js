@@ -1,26 +1,26 @@
 // app/otp.server.js
-// Gupshup OTP helper + rate limiting. Ye file sirf server par chalti hai,
-// isliye Gupshup ka password yahan safe hai (buyer ko nahi dikhta).
-// NOTE: Is app ka code public GitHub repo me push na karein.
+// Gupshup OTP helper + rate limiting. This file runs only on the server,
+// so the Gupshup password here is never visible to buyers.
+// NOTE: Do not push this code to a public GitHub repo.
 import crypto from "node:crypto";
 
-// ======================= CONFIG — yahan apni values daalein =======================
+// ======================= CONFIG — fill in your values here =======================
 const GUPSHUP_USERID = "2000137285";
 const GUPSHUP_PASSWORD = "hYODZWsF0";
 const GUPSHUP_API_URL = "https://enterprise.smsgupshup.com/GatewayAPI/rest";
 
-// DLT-approved template se EXACT match hona chahiye (ek-ek word, space, full stop).
-// Template me jahan {#var#} hai, wahan %code% likhein.
+// Must EXACTLY match the DLT-approved template (every word, space and full stop).
+// Wherever the template has {#var#}, write %code%.
 const OTP_MESSAGE = "Dear Customer, Your OTP is %code%. Please use this for any of your interactions on Fabindia website. OTP is valid for 30 secs.";
 const OTP_CODE_LENGTH = "4";
 
-// ---- DLT details (Gupshup dashboard / DLT portal se) ----
-// Khaali ("") chhodne par ye parameter Gupshup ko nahi bheja jayega.
+// ---- DLT details (from the Gupshup dashboard / DLT portal) ----
+// Leave empty ("") to skip sending that parameter to Gupshup.
 const SENDER_MASK = "";          // 6-letter Sender ID / Header, e.g. "FABIND"
-const DLT_TEMPLATE_ID = "";      // DLT Template ID (numeric), e.g. "1107160000000000000"
-const PRINCIPAL_ENTITY_ID = "";  // DLT Entity ID (numeric), e.g. "1101160000000000000"
+const DLT_TEMPLATE_ID = "";      // DLT Template ID (numeric)
+const PRINCIPAL_ENTITY_ID = "";  // DLT Entity ID (numeric)
 
-// cod_otp_token signature ke liye secret (koi bhi lambi random string)
+// Secret used to sign cod_otp_token (any long random string)
 const SIGNING_SECRET = "dce436042a8a54ce5583d0497295733dd5b902448f05b04c9e730c1b962bc1dc";
 // ===================================================================================
 
@@ -36,7 +36,7 @@ export function normalizeIndianPhone(raw) {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limits (in-memory; ek server instance ke liye theek hai)
+// Rate limits (in-memory; fine for a single server instance)
 // ---------------------------------------------------------------------------
 const RESEND_COOLDOWN_MS = 30_000; // 30 sec between OTPs
 const MAX_SENDS_PER_HOUR = 5; // per phone number

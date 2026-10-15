@@ -16,7 +16,7 @@ const ATTR = {
 
 const DEFAULT_COD_TYPES = 'paymentOnDelivery,manualPayment';
 const RESEND_SECONDS = 30;
-const OTP_LENGTH = 4; // OTP me sirf itne digits
+const OTP_LENGTH = 4; // Number of digits in the OTP
 
 export default function extension() {
   render(<Extension />, document.body);
@@ -245,7 +245,7 @@ function Extension() {
               disabled={loading !== null}
               onInput={(e) => {
                 const raw = e.currentTarget.value || '';
-                // Sirf digits, aur zyada se zyada OTP_LENGTH
+                // Digits only, max OTP_LENGTH characters
                 const clean = raw.replace(/\D/g, '').slice(0, OTP_LENGTH);
                 if (clean !== raw) e.currentTarget.value = clean;
                 setOtp(clean);

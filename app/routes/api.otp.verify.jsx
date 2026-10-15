@@ -25,13 +25,13 @@ export const action = async ({ request }) => {
   }
 
   if (!takeVerifyAttempt(phone)) {
-    return reply({ ok: false, error: "Bahut zyada galat attempts. Naya OTP mangwayein." }, 429);
+    return reply({ ok: false, error: "Too many incorrect attempts. Please request a new OTP." }, 429);
   }
 
   try {
     const r = await verifyOtp(phone, otp);
     console.log(`[otp/verify] ${sessionToken.dest} ${phone} -> ${r.raw}`);
-    if (!r.ok) return reply({ ok: false, error: "Galat ya expired OTP." }, 400);
+    if (!r.ok) return reply({ ok: false, error: "Incorrect or expired OTP." }, 400);
 
     clearVerifyAttempts(phone);
     const verifiedAt = new Date().toISOString();

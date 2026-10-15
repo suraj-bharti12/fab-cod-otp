@@ -7,14 +7,14 @@ import {
   sendOtp,
 } from "../otp.server";
 
-// OPTIONS (CORS preflight) aur GET ko bhi handle karta hai
+// Also handles OPTIONS (CORS preflight) and GET
 export const loader = async ({ request }) => {
   const { cors } = await authenticate.public.checkout(request);
   return cors(Response.json({ ok: false, error: "Use POST" }, { status: 405 }));
 };
 
 export const action = async ({ request }) => {
-  // Checkout extension ka session token verify karta hai (invalid ho to 401 throw)
+  // Verifies the checkout extension session token (throws 401 if invalid)
   const { sessionToken, cors } = await authenticate.public.checkout(request);
   const reply = (body, status = 200) => cors(Response.json(body, { status }));
 
@@ -28,7 +28,7 @@ export const action = async ({ request }) => {
       {
         ok: false,
         retryAfter: limit.retryAfter,
-        error: `Thodi der baad try karein (${limit.retryAfter}s).`,
+        error: `Please try again in ${limit.retryAfter}s.`,
       },
       429,
     );
@@ -38,7 +38,7 @@ export const action = async ({ request }) => {
     const r = await sendOtp(phone);
     console.log(`[otp/send] ${sessionToken.dest} ${phone} -> ${r.raw}`);
     if (!r.ok) {
-      return reply({ ok: false, error: "OTP bhejne me problem hui. Dobara try karein." }, 502);
+      return reply({ ok: false, error: "Could not send OTP. Please try again." }, 502);
     }
     recordSend(phone);
     return reply({ ok: true });
