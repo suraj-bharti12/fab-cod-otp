@@ -1,0 +1,276 @@
+import '@shopify/ui-extensions/preact';
+import {render} from 'preact';
+import {useEffect, useState} from 'preact/hooks';
+import {
+  useBuyerJourneyIntercept,
+  useExtensionCapability,
+} from '@shopify/ui-extensions/checkout/preact';
+
+// ---- Order attributes (key -> value) jo order par save honge ----
+const ATTR = {
+  VERIFIED: 'cod_otp_verified', // "true" / "false"
+  PHONE: 'cod_otp_phone', // 91XXXXXXXXXX
+  VERIFIED_AT: 'cod_otp_verified_at', // ISO time
+  TOKEN: 'cod_otp_token', // HMAC signature from backend (tamper check)
+};
+
+const DEFAULT_COD_TYPES = 'paymentOnDelivery,manualPayment';
+const RESEND_SECONDS = 30;
+
+export default function extension() {
+  render(<Extension />, document.body);
+}
+
+/** "+91 98765-43210" / "098765 43210" / "9876543210" -> "919876543210" */
+function normalizeIndianPhone(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10) d = '91' + d;
+  return /^91[6-9]\d{9}$/.test(d) ? d : null;
+}
+
+function maskPhone(p) {
+  return p ? `+91 ${p.slice(2, 4)}XXXXX${p.slice(-3)}` : '';
+}
+
+function Extension() {
+  // ---------- Checkout data (signals => auto re-render) ----------
+  const settings = shopify.settings.value || {};
+  const backendUrl = String(settings.backend_url || '').trim().replace(/\/+$/, '');
+  const codTypes = String(settings.cod_payment_types || DEFAULT_COD_TYPES)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const selectedPayments = shopify.selectedPaymentOptions.value || [];
+  const isCod = selectedPayments.some((o) => codTypes.includes(o.type));
+
+  const shippingPhone = shopify.shippingAddress?.value?.phone || '';
+  const attributes = shopify.attributes.value || [];
+  const getAttr = (k) => attributes.find((a) => a.key === k)?.value;
+  const canUpdateAttributes =
+    shopify.instructions.value?.attributes?.canUpdateAttributes !== false;
+  const blockProgressGranted = useExtensionCapability('block_progress');
+
+  // ---------- Local UI state ----------
+  const [phoneInput, setPhoneInput] = useState(shippingPhone);
+  const [phoneEdited, setPhoneEdited] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState(null);
+  const [loading, setLoading] = useState(null); // 'send' | 'verify' | null
+  const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  // Default: shipping address wala phone. Buyer change kare to uska number.
+  useEffect(() => {
+    if (!phoneEdited) setPhoneInput(shippingPhone);
+  }, [shippingPhone, phoneEdited]);
+
+  // Resend countdown
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const phone = normalizeIndianPhone(phoneInput);
+  const isVerified =
+    getAttr(ATTR.VERIFIED) === 'true' && !!phone && getAttr(ATTR.PHONE) === phone;
+
+  // Number badal gaya to purana "verified" attribute hata do
+  useEffect(() => {
+    if (!canUpdateAttributes) return;
+    const storedPhone = getAttr(ATTR.PHONE);
+    if (getAttr(ATTR.VERIFIED) === 'true' && storedPhone && storedPhone !== phone) {
+      setAttributes({[ATTR.VERIFIED]: 'false', [ATTR.TOKEN]: ''}).catch(() => {});
+    }
+    if (otpSentTo && otpSentTo !== phone) {
+      setOtpSentTo(null);
+      setOtp('');
+    }
+  }, [phone]);
+
+  // ---------- Block "Complete order" until OTP verified (only for COD) ----------
+  useBuyerJourneyIntercept(({canBlockProgress}) => {
+    if (!canBlockProgress || !isCod || isVerified || !canUpdateAttributes) {
+      return {behavior: 'allow'};
+    }
+    return {
+      behavior: 'block',
+      reason: 'COD OTP not verified',
+      errors: [
+        {message: 'Cash on Delivery ke liye apna mobile number OTP se verify karein.'},
+      ],
+      perform: (result) => {
+        if (result.behavior === 'block') {
+          setError('Order place karne se pehle OTP verify karein.');
+        }
+      },
+    };
+  });
+
+  // ---------- Helpers ----------
+  async function setAttributes(map) {
+    for (const [key, value] of Object.entries(map)) {
+      const res = await shopify.applyAttributeChange({type: 'updateAttribute', key, value});
+      if (res.type === 'error') throw new Error(res.message || 'Could not save attribute');
+    }
+  }
+
+  async function callBackend(path, body) {
+    if (!backendUrl) throw new Error('OTP service configured nahi hai (backend URL missing).');
+    const token = await shopify.sessionToken.get();
+    const res = await fetch(`${backendUrl}/api${path}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      if (data.retryAfter) setCooldown(data.retryAfter);
+      throw new Error(data.error || 'Kuch galat ho gaya. Dobara try karein.');
+    }
+    return data;
+  }
+
+  async function sendOtp() {
+    setError('');
+    setInfo('');
+    if (!phone) {
+      setError('Valid 10-digit Indian mobile number daalein.');
+      return;
+    }
+    setLoading('send');
+    try {
+      await callBackend('/otp/send', {phone});
+      setOtpSentTo(phone);
+      setOtp('');
+      setCooldown(RESEND_SECONDS);
+      setInfo(`OTP ${maskPhone(phone)} par bhej diya gaya hai.`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function verifyOtp() {
+    setError('');
+    setInfo('');
+    const code = otp.trim();
+    if (!/^\d{4,8}$/.test(code)) {
+      setError('SMS me aaya OTP daalein.');
+      return;
+    }
+    setLoading('verify');
+    try {
+      const data = await callBackend('/otp/verify', {phone, otp: code});
+      await setAttributes({
+        [ATTR.VERIFIED]: 'true',
+        [ATTR.PHONE]: phone,
+        [ATTR.VERIFIED_AT]: data.verifiedAt,
+        [ATTR.TOKEN]: data.token,
+      });
+      setOtp('');
+      setOtpSentTo(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  // ---------- UI ----------
+  const editorType = shopify.extension.editor?.type;
+
+  if (editorType === 'checkout' && !blockProgressGranted) {
+    return (
+      <s-banner tone="warning" heading="COD OTP: checkout blocking off hai">
+        Checkout editor → app block → "Allow app to block checkout" enable karein,
+        warna bina OTP ke bhi COD order place ho jayega.
+      </s-banner>
+    );
+  }
+
+  if (!isCod) return null;
+
+  if (!canUpdateAttributes) {
+    return (
+      <s-banner tone="warning">
+        Is checkout me OTP verification available nahi hai.
+      </s-banner>
+    );
+  }
+
+  if (isVerified) {
+    return (
+      <s-banner tone="success" heading="Mobile number verified">
+        {maskPhone(phone)} — aap Cash on Delivery se order place kar sakte hain.
+      </s-banner>
+    );
+  }
+
+  const otpSent = otpSentTo === phone;
+
+  return (
+    <s-section heading="Cash on Delivery ke liye OTP verify karein">
+      <s-stack gap="base">
+        <s-text color="subdued">
+          COD order confirm karne ke liye hum aapke mobile number par ek OTP bhejenge.
+        </s-text>
+
+        <s-text-field
+          label="Mobile number"
+          value={phoneInput}
+          disabled={loading !== null}
+          onInput={(e) => {
+            setPhoneEdited(true);
+            setPhoneInput(e.currentTarget.value);
+          }}
+        />
+
+        {otpSent ? (
+          <s-stack gap="base">
+            <s-text-field
+              label="OTP"
+              value={otp}
+              disabled={loading !== null}
+              onInput={(e) => setOtp(e.currentTarget.value.replace(/\D/g, ''))}
+            />
+            <s-stack direction="inline" gap="base">
+              <s-button
+                variant="primary"
+                loading={loading === 'verify'}
+                disabled={loading !== null}
+                onClick={verifyOtp}
+              >
+                Verify OTP
+              </s-button>
+              <s-button
+                variant="secondary"
+                loading={loading === 'send'}
+                disabled={loading !== null || cooldown > 0}
+                onClick={sendOtp}
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
+              </s-button>
+            </s-stack>
+          </s-stack>
+        ) : (
+          <s-button
+            variant="primary"
+            loading={loading === 'send'}
+            disabled={loading !== null || cooldown > 0}
+            onClick={sendOtp}
+          >
+            {cooldown > 0 ? `Send OTP (${cooldown}s)` : 'Send OTP'}
+          </s-button>
+        )}
+
+        {info ? <s-banner tone="info">{info}</s-banner> : null}
+        {error ? <s-banner tone="critical">{error}</s-banner> : null}
+      </s-stack>
+    </s-section>
+  );
+}
