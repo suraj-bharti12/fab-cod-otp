@@ -16,6 +16,7 @@ const ATTR = {
 
 const DEFAULT_COD_TYPES = 'paymentOnDelivery,manualPayment';
 const RESEND_SECONDS = 30;
+const OTP_LENGTH = 4; // OTP me sirf itne digits
 
 export default function extension() {
   render(<Extension />, document.body);
@@ -157,8 +158,8 @@ function Extension() {
     setError('');
     setInfo('');
     const code = otp.trim();
-    if (!/^\d{4,8}$/.test(code)) {
-      setError('Please enter the OTP you received via SMS.');
+    if (code.length !== OTP_LENGTH) {
+      setError(`Please enter the ${OTP_LENGTH}-digit OTP you received via SMS.`);
       return;
     }
     setLoading('verify');
@@ -237,16 +238,24 @@ function Extension() {
         {!phone ? null : otpSent ? (
           <s-stack gap="base">
             <s-text-field
-              label="OTP"
+              label={`Enter ${OTP_LENGTH}-digit OTP`}
               value={otp}
+              maxLength={OTP_LENGTH}
+              autocomplete="one-time-code"
               disabled={loading !== null}
-              onInput={(e) => setOtp(e.currentTarget.value.replace(/\D/g, ''))}
+              onInput={(e) => {
+                const raw = e.currentTarget.value || '';
+                // Sirf digits, aur zyada se zyada OTP_LENGTH
+                const clean = raw.replace(/\D/g, '').slice(0, OTP_LENGTH);
+                if (clean !== raw) e.currentTarget.value = clean;
+                setOtp(clean);
+              }}
             />
             <s-stack direction="inline" gap="base">
               <s-button
                 variant="primary"
                 loading={loading === 'verify'}
-                disabled={loading !== null}
+                disabled={loading !== null || otp.length !== OTP_LENGTH}
                 onClick={verifyOtp}
               >
                 Verify OTP
