@@ -33,6 +33,10 @@ function maskPhone(p) {
   return p ? `+91 ${p.slice(2, 4)}XXXXX${p.slice(-3)}` : '';
 }
 
+function formatPhone(p) {
+  return p ? `+91 ${p.slice(2, 7)} ${p.slice(7)}` : '';
+}
+
 function Extension() {
   // ---------- Checkout data (signals => auto re-render) ----------
   const settings = shopify.settings.value || {};
@@ -53,19 +57,12 @@ function Extension() {
   const blockProgressGranted = useExtensionCapability('block_progress');
 
   // ---------- Local UI state ----------
-  const [phoneInput, setPhoneInput] = useState(shippingPhone);
-  const [phoneEdited, setPhoneEdited] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpSentTo, setOtpSentTo] = useState(null);
   const [loading, setLoading] = useState(null); // 'send' | 'verify' | null
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [cooldown, setCooldown] = useState(0);
-
-  // Default: phone from the shipping address. Buyer can change it.
-  useEffect(() => {
-    if (!phoneEdited) setPhoneInput(shippingPhone);
-  }, [shippingPhone, phoneEdited]);
 
   // Resend countdown
   useEffect(() => {
@@ -74,7 +71,8 @@ function Extension() {
     return () => clearTimeout(t);
   }, [cooldown]);
 
-  const phone = normalizeIndianPhone(phoneInput);
+  // Phone always comes from the shipping address (not editable here)
+  const phone = normalizeIndianPhone(shippingPhone);
   const isVerified =
     getAttr(ATTR.VERIFIED) === 'true' && !!phone && getAttr(ATTR.PHONE) === phone;
 
@@ -138,7 +136,7 @@ function Extension() {
     setError('');
     setInfo('');
     if (!phone) {
-      setError('Please enter a valid 10-digit Indian mobile number.');
+      setError('Please add a valid 10-digit mobile number in your delivery address.');
       return;
     }
     setLoading('send');
@@ -220,17 +218,23 @@ function Extension() {
           To confirm your COD order, we will send an OTP to your mobile number.
         </s-text>
 
-        <s-text-field
-          label="Mobile number"
-          value={phoneInput}
-          disabled={loading !== null}
-          onInput={(e) => {
-            setPhoneEdited(true);
-            setPhoneInput(e.currentTarget.value);
-          }}
-        />
+        {phone ? (
+          <s-stack gap="base">
+            <s-text>
+              Mobile number: <s-text type="strong">{formatPhone(phone)}</s-text>
+            </s-text>
+            <s-text color="subdued">
+              To use a different number, update the phone number in your delivery address.
+            </s-text>
+          </s-stack>
+        ) : (
+          <s-banner tone="critical">
+            Please add a valid 10-digit mobile number in your delivery address to use
+            Cash on Delivery.
+          </s-banner>
+        )}
 
-        {otpSent ? (
+        {!phone ? null : otpSent ? (
           <s-stack gap="base">
             <s-text-field
               label="OTP"
