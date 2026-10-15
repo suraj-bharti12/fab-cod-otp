@@ -6,7 +6,7 @@ import {
   useExtensionCapability,
 } from '@shopify/ui-extensions/checkout/preact';
 
-// ---- Order attributes (key -> value) jo order par save honge ----
+// ---- Order attributes (key -> value) saved on the order ----
 const ATTR = {
   VERIFIED: 'cod_otp_verified', // "true" / "false"
   PHONE: 'cod_otp_phone', // 91XXXXXXXXXX
@@ -62,7 +62,7 @@ function Extension() {
   const [info, setInfo] = useState('');
   const [cooldown, setCooldown] = useState(0);
 
-  // Default: shipping address wala phone. Buyer change kare to uska number.
+  // Default: phone from the shipping address. Buyer can change it.
   useEffect(() => {
     if (!phoneEdited) setPhoneInput(shippingPhone);
   }, [shippingPhone, phoneEdited]);
@@ -78,7 +78,7 @@ function Extension() {
   const isVerified =
     getAttr(ATTR.VERIFIED) === 'true' && !!phone && getAttr(ATTR.PHONE) === phone;
 
-  // Number badal gaya to purana "verified" attribute hata do
+  // If the number changes, clear the old "verified" attribute
   useEffect(() => {
     if (!canUpdateAttributes) return;
     const storedPhone = getAttr(ATTR.PHONE);
@@ -100,11 +100,11 @@ function Extension() {
       behavior: 'block',
       reason: 'COD OTP not verified',
       errors: [
-        {message: 'Cash on Delivery ke liye apna mobile number OTP se verify karein.'},
+        {message: 'Please verify your mobile number via OTP to use Cash on Delivery.'},
       ],
       perform: (result) => {
         if (result.behavior === 'block') {
-          setError('Order place karne se pehle OTP verify karein.');
+          setError('Please verify the OTP before placing your order.');
         }
       },
     };
@@ -119,7 +119,7 @@ function Extension() {
   }
 
   async function callBackend(path, body) {
-    if (!backendUrl) throw new Error('OTP service configured nahi hai (backend URL missing).');
+    if (!backendUrl) throw new Error('OTP service is not configured (backend URL missing).');
     const token = await shopify.sessionToken.get();
     const res = await fetch(`${backendUrl}/api${path}`, {
       method: 'POST',
@@ -129,7 +129,7 @@ function Extension() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
       if (data.retryAfter) setCooldown(data.retryAfter);
-      throw new Error(data.error || 'Kuch galat ho gaya. Dobara try karein.');
+      throw new Error(data.error || 'Something went wrong. Please try again.');
     }
     return data;
   }
@@ -138,7 +138,7 @@ function Extension() {
     setError('');
     setInfo('');
     if (!phone) {
-      setError('Valid 10-digit Indian mobile number daalein.');
+      setError('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
     setLoading('send');
@@ -147,7 +147,7 @@ function Extension() {
       setOtpSentTo(phone);
       setOtp('');
       setCooldown(RESEND_SECONDS);
-      setInfo(`OTP ${maskPhone(phone)} par bhej diya gaya hai.`);
+      setInfo(`OTP has been sent to ${maskPhone(phone)}.`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -160,7 +160,7 @@ function Extension() {
     setInfo('');
     const code = otp.trim();
     if (!/^\d{4,8}$/.test(code)) {
-      setError('SMS me aaya OTP daalein.');
+      setError('Please enter the OTP you received via SMS.');
       return;
     }
     setLoading('verify');
@@ -186,9 +186,9 @@ function Extension() {
 
   if (editorType === 'checkout' && !blockProgressGranted) {
     return (
-      <s-banner tone="warning" heading="COD OTP: checkout blocking off hai">
-        Checkout editor → app block → "Allow app to block checkout" enable karein,
-        warna bina OTP ke bhi COD order place ho jayega.
+      <s-banner tone="warning" heading="COD OTP: checkout blocking is off">
+        In the checkout editor, select this app block and enable "Allow app to block
+        checkout". Otherwise COD orders can be placed without OTP verification.
       </s-banner>
     );
   }
@@ -198,7 +198,7 @@ function Extension() {
   if (!canUpdateAttributes) {
     return (
       <s-banner tone="warning">
-        Is checkout me OTP verification available nahi hai.
+        OTP verification is not available for this checkout.
       </s-banner>
     );
   }
@@ -206,7 +206,7 @@ function Extension() {
   if (isVerified) {
     return (
       <s-banner tone="success" heading="Mobile number verified">
-        {maskPhone(phone)} — aap Cash on Delivery se order place kar sakte hain.
+        {maskPhone(phone)} — you can now place your order with Cash on Delivery.
       </s-banner>
     );
   }
@@ -214,10 +214,10 @@ function Extension() {
   const otpSent = otpSentTo === phone;
 
   return (
-    <s-section heading="Cash on Delivery ke liye OTP verify karein">
+    <s-section heading="Verify OTP for Cash on Delivery">
       <s-stack gap="base">
         <s-text color="subdued">
-          COD order confirm karne ke liye hum aapke mobile number par ek OTP bhejenge.
+          To confirm your COD order, we will send an OTP to your mobile number.
         </s-text>
 
         <s-text-field

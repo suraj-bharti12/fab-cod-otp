@@ -11,42 +11,14 @@ handle = "fab-cod-otp"
 type = "ui_extension"
 uid = "659ed2d7-5bd1-833f-b79f-10cfeaecbe65907cee33"
 
-# Controls where in Shopify your extension will be injected,
-# and the file that contains your extension’s source code. Learn more:
-# https://shopify.dev/docs/api/checkout-ui-extensions/latest/targets
-
 [[extensions.targeting]]
 module = "./src/Checkout.jsx"
 target = "purchase.checkout.payment-method-list.render-after"
 
-block_progress = true
-
 [extensions.capabilities]
-# Gives your extension access to directly query Shopify’s storefront API.
-# https://shopify.dev/docs/apps/build/checkout/capabilities#storefront-api-access
 api_access = true
-
-# Gives your extension access to make external network calls, using the
-# JavaScript `fetch()` API. Learn more:
-# https://shopify.dev/docs/apps/build/checkout/capabilities#network-access
-
- network_access = true
-
-# Learn more about loading metafields on checkout resources, including the cart,
-# products, and customers:
-# https://shopify.dev/docs/api/checkout-ui-extensions/latest#configuration
-
-# Defines settings that will be collected from merchants installing
-# your extension. Learn more:
-# https://shopify.dev/docs/api/checkout-ui-extensions/latest#configuration
-
-# [extensions.settings]
-# [[extensions.settings.fields]]
-# key = "banner_title"
-# type = "single_line_text_field"
-# name = "Banner title"
-# description = "Enter a title for the banner"
-
+network_access = true
+block_progress = true
 
 [extensions.settings]
 
