@@ -2,7 +2,7 @@
 
 client_id = "cba960147384fce360df54c07736d8ba"
 name = "fab-cod-otp"
-application_url = "https://example.com"
+application_url = "https://fab-cod-otp.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -45,8 +45,11 @@ api_version = "2027-01"
   topics = [ "app/scopes_update" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://fab-cod-otp.onrender.com/api/auth",
+  "https://fab-cod-otp.onrender.com/auth/callback"
+]
 
 [build]
 include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
