@@ -14,9 +14,15 @@ const ATTR = {
   TOKEN: 'cod_otp_token', // HMAC signature from backend (tamper check)
 };
 
+// Fixed backend origin. The session token is only ever sent here (never to a configurable URL).
+const BACKEND_URL = 'https://fab-cod-otp.onrender.com';
+
 const DEFAULT_COD_TYPES = 'paymentOnDelivery,manualPayment';
 const RESEND_SECONDS = 30;
 const OTP_LENGTH = 4; // Number of digits in the OTP
+
+// If the cart has this attribute (e.g. store staff / ASM orders), skip OTP completely
+const SKIP_OTP_ATTRIBUTE = {key: 'channelCode', value: 'ASM'};
 
 export default function extension() {
   render(<Extension />, document.body);
@@ -41,7 +47,6 @@ function formatPhone(p) {
 function Extension() {
   // ---------- Checkout data (signals => auto re-render) ----------
   const settings = shopify.settings.value || {};
-  const backendUrl = String(settings.backend_url || '').trim().replace(/\/+$/, '');
   const codTypes = String(settings.cod_payment_types || DEFAULT_COD_TYPES)
     .split(',')
     .map((s) => s.trim())
@@ -53,6 +58,9 @@ function Extension() {
   const shippingPhone = shopify.shippingAddress?.value?.phone || '';
   const attributes = shopify.attributes.value || [];
   const getAttr = (k) => attributes.find((a) => a.key === k)?.value;
+  const skipOtp =
+    String(getAttr(SKIP_OTP_ATTRIBUTE.key) || '').trim().toUpperCase() ===
+    SKIP_OTP_ATTRIBUTE.value.toUpperCase();
   const canUpdateAttributes =
     shopify.instructions.value?.attributes?.canUpdateAttributes !== false;
   const blockProgressGranted = useExtensionCapability('block_progress');
@@ -92,7 +100,7 @@ function Extension() {
 
   // ---------- Block "Complete order" until OTP verified (only for COD) ----------
   useBuyerJourneyIntercept(({canBlockProgress}) => {
-    if (!canBlockProgress || !isCod || isVerified || !canUpdateAttributes) {
+    if (!canBlockProgress || !isCod || skipOtp || isVerified || !canUpdateAttributes) {
       return {behavior: 'allow'};
     }
     return {
@@ -118,9 +126,8 @@ function Extension() {
   }
 
   async function callBackend(path, body) {
-    if (!backendUrl) throw new Error('OTP service is not configured (backend URL missing).');
     const token = await shopify.sessionToken.get();
-    const res = await fetch(`${backendUrl}/api${path}`, {
+    const res = await fetch(`${BACKEND_URL}/api${path}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
       body: JSON.stringify(body),
@@ -193,6 +200,9 @@ function Extension() {
   }
 
   if (!isCod) return null;
+
+  // ASM / staff orders: no OTP needed
+  if (skipOtp) return null;
 
   if (!canUpdateAttributes) {
     return (

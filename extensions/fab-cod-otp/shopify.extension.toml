@@ -1,8 +1,3 @@
-# Learn more about configuring your checkout UI extension:
-# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration
-
-# The version of APIs your extension will receive. Learn more:
-# https://shopify.dev/docs/api/usage/versioning
 api_version = "2026-10"
 
 [[extensions]]
@@ -25,12 +20,6 @@ block_progress = true
 
 # Settings the merchant can change in the checkout editor
 [extensions.settings]
-
-  [[extensions.settings.fields]]
-  key = "backend_url"
-  type = "single_line_text_field"
-  name = "App URL"
-  description = "Your app URL, e.g. https://your-app.onrender.com (no trailing slash)"
 
   [[extensions.settings.fields]]
   key = "cod_payment_types"

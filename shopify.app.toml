@@ -44,6 +44,11 @@ api_version = "2027-01"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
+  # Mandatory GDPR compliance webhooks
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/compliance"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
 [auth]
 redirect_urls = [
   "https://fab-cod-otp.onrender.com/api/auth",
@@ -51,4 +56,5 @@ redirect_urls = [
 ]
 
 [build]
+include_config_on_deploy = true
 automatically_update_urls_on_dev = false

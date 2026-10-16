@@ -1,12 +1,11 @@
 // app/otp.server.js
-// Gupshup OTP helper + rate limiting. This file runs only on the server,
-// so the Gupshup password here is never visible to buyers.
-// NOTE: Do not push this code to a public GitHub repo.
+// Gupshup OTP helper + rate limiting. Runs only on the server.
+// Secrets (password, signing key) come from environment variables (set them in Render),
+// never from source code.
 import crypto from "node:crypto";
 
-// ======================= CONFIG — fill in your values here =======================
-const GUPSHUP_USERID = "2000137285";
-const GUPSHUP_PASSWORD = "hYODZWsF0";
+// ======================= CONFIG =======================
+const GUPSHUP_USERID = process.env.GUPSHUP_USERID || "2000137285";
 const GUPSHUP_API_URL = "https://enterprise.smsgupshup.com/GatewayAPI/rest";
 
 // Must EXACTLY match the DLT-approved template (every word, space and full stop).
@@ -19,10 +18,14 @@ const OTP_CODE_LENGTH = "4";
 const SENDER_MASK = "";          // 6-letter Sender ID / Header, e.g. "FABIND"
 const DLT_TEMPLATE_ID = "";      // DLT Template ID (numeric)
 const PRINCIPAL_ENTITY_ID = "";  // DLT Entity ID (numeric)
+// =======================================================
 
-// Secret used to sign cod_otp_token (any long random string)
-const SIGNING_SECRET = "dce436042a8a54ce5583d0497295733dd5b902448f05b04c9e730c1b962bc1dc";
-// ===================================================================================
+// Secrets: required environment variables
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing environment variable: ${name}`);
+  return value;
+}
 
 // ---------------------------------------------------------------------------
 // Phone
@@ -88,7 +91,7 @@ export function clearVerifyAttempts(phone) {
 async function gupshup2fa(params) {
   const body = new URLSearchParams({
     userid: GUPSHUP_USERID,
-    password: GUPSHUP_PASSWORD,
+    password: requireEnv("GUPSHUP_PASSWORD"),
     method: "TWO_FACTOR_AUTH",
     v: "1.1",
     format: "text",
@@ -127,7 +130,7 @@ export function verifyOtp(phone, otp) {
 // ---------------------------------------------------------------------------
 export function signAttribute(phone, verifiedAt) {
   return crypto
-    .createHmac("sha256", SIGNING_SECRET)
+    .createHmac("sha256", requireEnv("OTP_SIGNING_SECRET"))
     .update(`${phone}|${verifiedAt}`)
     .digest("hex");
 }
