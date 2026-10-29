@@ -6,6 +6,7 @@ import {
   clearVerifyAttempts,
   verifyOtp,
   signAttribute,
+  maskPhoneForLog,
 } from "../otp.server";
 
 export const loader = async ({ request }) => {
@@ -14,7 +15,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { sessionToken, cors } = await authenticate.public.checkout(request);
+  const { cors } = await authenticate.public.checkout(request);
   const reply = (body, status = 200) => cors(Response.json(body, { status }));
 
   const body = await request.json().catch(() => ({}));
@@ -30,14 +31,14 @@ export const action = async ({ request }) => {
 
   try {
     const r = await verifyOtp(phone, otp);
-    console.log(`[otp/verify] ${sessionToken.dest} ${phone} -> ${r.raw}`);
+    console.log(`[otp/verify] ${maskPhoneForLog(phone)} -> ${r.status}`);
     if (!r.ok) return reply({ ok: false, error: "Incorrect or expired OTP." }, 400);
 
     clearVerifyAttempts(phone);
     const verifiedAt = new Date().toISOString();
     return reply({ ok: true, verifiedAt, token: signAttribute(phone, verifiedAt) });
   } catch (e) {
-    console.error("[otp/verify] error", e);
+    console.error(`[otp/verify] ${maskPhoneForLog(phone)} -> request failed: ${e?.message || "unknown"}`);
     return reply({ ok: false, error: "OTP service unavailable." }, 502);
   }
 };

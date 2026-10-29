@@ -38,6 +38,12 @@ export function normalizeIndianPhone(raw) {
   return /^91[6-9]\d{9}$/.test(d) ? d : null;
 }
 
+/** For logs only: "919876543210" -> "91XXXXXX3210" */
+export function maskPhoneForLog(phone) {
+  const p = String(phone || "");
+  return p.length > 6 ? `${p.slice(0, 2)}XXXXXX${p.slice(-4)}` : "invalid";
+}
+
 // ---------------------------------------------------------------------------
 // Rate limits (in-memory; fine for a single server instance)
 // ---------------------------------------------------------------------------
@@ -104,7 +110,13 @@ async function gupshup2fa(params) {
     body,
   });
   const text = (await res.text()).trim();
-  return { ok: res.ok && /^success/i.test(text), raw: text };
+  const ok = res.ok && /^success/i.test(text);
+  // Safe summary for logs: "success" or "error <code> <message>" (no phone, no ids)
+  const parts = text.split("|").map((p) => p.trim());
+  const status = ok
+    ? "success"
+    : `error ${parts[1] || res.status} ${parts[2] || ""}`.trim().slice(0, 120);
+  return { ok, status };
 }
 
 export function sendOtp(phone) {
